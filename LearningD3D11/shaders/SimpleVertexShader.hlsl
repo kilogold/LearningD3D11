@@ -17,10 +17,12 @@ struct AppData
 {
     float3 position : POSITION;
     float3 color: COLOR;
+	float2 texcoord: TEXCOORD;
 };
 
 struct VertexShaderOutput
 {
+	float2 texcoord: TEXCOORD;
     float4 color : COLOR;
     float4 position : SV_POSITION;
 };

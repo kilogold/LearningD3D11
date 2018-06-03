@@ -56,22 +56,23 @@ XMMATRIX g_ViewMatrix;
 XMMATRIX g_ProjectionMatrix;
 
 // Vertex data for a colored cube.
-struct VertexPosColor
+struct VertexPosColorTex
 {
     XMFLOAT3 Position;
     XMFLOAT3 Color;
+	XMFLOAT2 Texture;
 };
 
-VertexPosColor g_Vertices[8] =
+VertexPosColorTex g_Vertices[8] =
 {
-    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f) }, // 0
-    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) }, // 1
-    { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f) }, // 2
-    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) }, // 3
-    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) }, // 4
-    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f) }, // 5
-    { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f) }, // 6
-    { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f) }  // 7
+    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(0,1) }, // 0
+    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(0,0) }, // 1
+    { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT2(1,0) }, // 2
+    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT2(1,1) }, // 3
+    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT2(1,1) }, // 4
+    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT2(1,0) }, // 5
+    { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT2(0,0) }, // 6
+    { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f), XMFLOAT2(0,1) }  // 7
 };
 
 WORD g_Indicies[36] =
@@ -365,7 +366,7 @@ bool LoadContent()
     ZeroMemory(&vertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
 
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    vertexBufferDesc.ByteWidth = sizeof(VertexPosColor) * _countof(g_Vertices);
+    vertexBufferDesc.ByteWidth = sizeof(VertexPosColorTex) * _countof(g_Vertices);
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
 
@@ -444,9 +445,10 @@ bool LoadContent()
     // Create the input layout for the vertex shader.
     D3D11_INPUT_ELEMENT_DESC vertexLayoutDesc[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColor,Position), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColor,Color), D3D11_INPUT_PER_VERTEX_DATA, 0 }
-    };
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColorTex,Position), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColorTex,Color), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColorTex,Texture), D3D11_INPUT_PER_VERTEX_DATA, 0 }
+	};
 
     hr = g_d3dDevice->CreateInputLayout(vertexLayoutDesc, _countof(vertexLayoutDesc), vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &g_d3dInputLayout);
     if (FAILED(hr))
@@ -537,7 +539,7 @@ void Render()
 
     Clear(Colors::CornflowerBlue, 1.0f, 0);
 
-    const UINT vertexStride = sizeof(VertexPosColor);
+    const UINT vertexStride = sizeof(VertexPosColorTex);
     const UINT offset = 0;
 
     g_d3dDeviceContext->IASetVertexBuffers(0, 1, &g_d3dVertexBuffer, &vertexStride, &offset);
