@@ -1,5 +1,7 @@
 #include <DirectXTemplate.h>
 #include <algorithm>
+#include <memory>
+#include "Effects.h"
 using namespace DirectX;
 
 const LONG g_WindowWidth = 1280;
@@ -19,6 +21,9 @@ IDXGISwapChain* g_d3dSwapChain = nullptr;
 ID3D11RenderTargetView* g_d3dRenderTargetView = nullptr;
 // Depth/stencil view for use as a depth buffer.
 ID3D11DepthStencilView* g_d3dDepthStencilView = nullptr;
+
+ID3D11ShaderResourceView* g_textureShaderResourceView = nullptr;
+
 // A texture to associate to the depth stencil view.
 ID3D11Texture2D* g_d3dDepthStencilBuffer = nullptr;
 
@@ -26,6 +31,7 @@ ID3D11Texture2D* g_d3dDepthStencilBuffer = nullptr;
 ID3D11DepthStencilState* g_d3dDepthStencilState = nullptr;
 // Define the functionality of the rasterizer stage.
 ID3D11RasterizerState* g_d3dRasterizerState = nullptr;
+ID3D11SamplerState* g_d3dSamplerState = nullptr;
 D3D11_VIEWPORT g_Viewport = { 0 };
 
 
@@ -65,14 +71,14 @@ struct VertexPosColorTex
 
 VertexPosColorTex g_Vertices[8] =
 {
-    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(0,1) }, // 0
-    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(0,0) }, // 1
-    { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT2(1,0) }, // 2
-    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT2(1,1) }, // 3
-    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT2(1,1) }, // 4
-    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT2(1,0) }, // 5
-    { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT2(0,0) }, // 6
-    { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f), XMFLOAT2(0,1) }  // 7
+    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(1,0) }, // 0
+    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(1,1) }, // 1
+    { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f),  XMFLOAT2(0,1) }, // 2
+    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f),  XMFLOAT2(0,0) }, // 3
+    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT2(0,0) }, // 4
+    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT2(0,1) }, // 5
+    { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f),  XMFLOAT2(1,1) }, // 6
+    { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f),  XMFLOAT2(1,0) }  // 7
 };
 
 WORD g_Indicies[36] =
@@ -354,6 +360,31 @@ int InitDirectX(HINSTANCE hInstance, BOOL vSync)
     g_Viewport.MinDepth = 0.0f;
     g_Viewport.MaxDepth = 1.0f;
 
+
+    // Create a sampler state for texture sampling in the pixel shader
+    D3D11_SAMPLER_DESC samplerDesc;
+    ZeroMemory(&samplerDesc, sizeof(D3D11_SAMPLER_DESC));
+
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.BorderColor[0] = 1.0f;
+    samplerDesc.BorderColor[1] = 1.0f;
+    samplerDesc.BorderColor[2] = 1.0f;
+    samplerDesc.BorderColor[3] = 1.0f;
+    samplerDesc.MinLOD = 0;
+    samplerDesc.MaxLOD = 0;
+
+    hr = g_d3dDevice->CreateSamplerState(&samplerDesc, &g_d3dSamplerState);
+    if (FAILED(hr))
+    {
+        MessageBoxA(nullptr, "Failed to create texture sampler.", "Error", MB_OK | MB_ICONERROR);
+        return false;
+    }
     return 0;
 }
 
@@ -493,6 +524,19 @@ bool LoadContent()
 
     g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Appliation], 0, nullptr, &g_ProjectionMatrix, 0, 0);
 
+    // Load textures
+    auto effectFactory = std::unique_ptr<EffectFactory>(new EffectFactory(g_d3dDevice));
+    effectFactory->SetDirectory(L"..\\assets");
+
+    try
+    {
+        effectFactory->CreateTexture(L"container.jpg", g_d3dDeviceContext, &g_textureShaderResourceView);
+    }
+    catch (std::exception&)
+    {
+        MessageBoxA(nullptr, "Failed to load texture.", "Error", MB_OK | MB_ICONERROR);
+        return false;
+    }
     return true;
 }
 
@@ -554,6 +598,8 @@ void Render()
     g_d3dDeviceContext->RSSetViewports(1, &g_Viewport);
 
     g_d3dDeviceContext->PSSetShader(g_d3dPixelShader, nullptr, 0);
+    g_d3dDeviceContext->PSSetSamplers(0,1,&g_d3dSamplerState);
+    g_d3dDeviceContext->PSSetShaderResources(0, 1, &g_textureShaderResourceView);
 
     g_d3dDeviceContext->OMSetRenderTargets(1, &g_d3dRenderTargetView, g_d3dDepthStencilView);
     g_d3dDeviceContext->OMSetDepthStencilState(g_d3dDepthStencilState, 1);

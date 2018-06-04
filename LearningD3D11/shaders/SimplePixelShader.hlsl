@@ -9,5 +9,6 @@ sampler Sampler : register(s0);
  
 float4 SimplePixelShader( PixelShaderInput IN ) : SV_TARGET
 {
-    return IN.color;
+    return Texture.Sample(Sampler, IN.texcoord) * IN.color;
+    //return IN.color;
 }
