@@ -62,23 +62,33 @@ XMMATRIX g_ViewMatrix;
 XMMATRIX g_ProjectionMatrix;
 
 // Vertex data for a colored cube.
-struct VertexPosColorTex
+struct VertexPosNormColTex
 {
     XMFLOAT3 Position;
+    XMFLOAT3 Normal;
     XMFLOAT3 Color;
 	XMFLOAT2 Texture;
 };
 
-VertexPosColorTex g_Vertices[8] =
+struct alignas(16) PerObjectTransformData
 {
-    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(1,0) }, // 0
-    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(1,1) }, // 1
-    { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f),  XMFLOAT2(0,1) }, // 2
-    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f),  XMFLOAT2(0,0) }, // 3
-    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT2(0,0) }, // 4
-    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT2(0,1) }, // 5
-    { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f),  XMFLOAT2(1,1) }, // 6
-    { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f),  XMFLOAT2(1,0) }  // 7
+    XMMATRIX WorldMatrix;
+    XMMATRIX InverseTransposeWorldMatrix;
+    XMMATRIX WorldViewProjectMatrix;
+};
+
+PerObjectTransformData g_PerObjTransformData;
+
+VertexPosNormColTex g_Vertices[8] =
+{
+    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(1,0) }, // 0
+    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(1,1) }, // 1
+    { XMFLOAT3(1.0f,  1.0f, -1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 0.0f),  XMFLOAT2(0,1) }, // 2
+    { XMFLOAT3(1.0f, -1.0f, -1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.0f, 0.0f),  XMFLOAT2(0,0) }, // 3
+    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT2(0,0) }, // 4
+    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT2(0,1) }, // 5
+    { XMFLOAT3(1.0f,  1.0f,  1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 1.0f),  XMFLOAT2(1,1) }, // 6
+    { XMFLOAT3(1.0f, -1.0f,  1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.0f, 1.0f),  XMFLOAT2(1,0) }  // 7
 };
 
 WORD g_Indicies[36] =
@@ -397,7 +407,7 @@ bool LoadContent()
     ZeroMemory(&vertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
 
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    vertexBufferDesc.ByteWidth = sizeof(VertexPosColorTex) * _countof(g_Vertices);
+    vertexBufferDesc.ByteWidth = sizeof(VertexPosNormColTex) * _countof(g_Vertices);
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
 
@@ -447,6 +457,12 @@ bool LoadContent()
     {
         return false;
     }
+
+    constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    constantBufferDesc.ByteWidth = sizeof(PerObjectTransformData);
+    constantBufferDesc.CPUAccessFlags = 0;
+    constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+
     hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dConstantBuffers[CB_Object]);
     if (FAILED(hr))
     {
@@ -476,9 +492,9 @@ bool LoadContent()
     // Create the input layout for the vertex shader.
     D3D11_INPUT_ELEMENT_DESC vertexLayoutDesc[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColorTex,Position), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColorTex,Color), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(VertexPosColorTex,Texture), D3D11_INPUT_PER_VERTEX_DATA, 0 }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
 
     hr = g_d3dDevice->CreateInputLayout(vertexLayoutDesc, _countof(vertexLayoutDesc), vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &g_d3dInputLayout);
@@ -522,8 +538,6 @@ bool LoadContent()
 
     g_ProjectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), clientWidth / clientHeight, 0.1f, 100.0f);
 
-    g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Appliation], 0, nullptr, &g_ProjectionMatrix, 0, 0);
-
     // Load textures
     auto effectFactory = std::unique_ptr<EffectFactory>(new EffectFactory(g_d3dDevice));
     effectFactory->SetDirectory(L"..\\assets");
@@ -546,15 +560,17 @@ void Update(float deltaTime)
     XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
     XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
     g_ViewMatrix = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
-    g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Frame], 0, nullptr, &g_ViewMatrix, 0, 0);
-
 
     static float angle = 0.0f;
     angle += 90.0f * deltaTime;
     XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
-
     g_WorldMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
-    g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Object], 0, nullptr, &g_WorldMatrix, 0, 0);
+
+    g_PerObjTransformData.WorldMatrix = g_WorldMatrix;
+    g_PerObjTransformData.WorldViewProjectMatrix = XMMatrixMultiply(g_WorldMatrix, XMMatrixMultiply(g_ViewMatrix,g_ProjectionMatrix ));
+    g_PerObjTransformData.InverseTransposeWorldMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, g_WorldMatrix));
+    
+    g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Object], 0, nullptr, &g_PerObjTransformData, 0, 0);
 }
 
 // Clear the color and depth buffers.
@@ -583,7 +599,7 @@ void Render()
 
     Clear(Colors::CornflowerBlue, 1.0f, 0);
 
-    const UINT vertexStride = sizeof(VertexPosColorTex);
+    const UINT vertexStride = sizeof(VertexPosNormColTex);
     const UINT offset = 0;
 
     g_d3dDeviceContext->IASetVertexBuffers(0, 1, &g_d3dVertexBuffer, &vertexStride, &offset);
@@ -619,6 +635,7 @@ void UnloadContent()
     SafeRelease(g_d3dInputLayout);
     SafeRelease(g_d3dVertexShader);
     SafeRelease(g_d3dPixelShader);
+    SafeRelease(g_textureShaderResourceView);
 }
 
 void Cleanup()
@@ -628,8 +645,17 @@ void Cleanup()
     SafeRelease(g_d3dDepthStencilBuffer);
     SafeRelease(g_d3dDepthStencilState);
     SafeRelease(g_d3dRasterizerState);
+    SafeRelease(g_d3dSamplerState);
     SafeRelease(g_d3dSwapChain);
     SafeRelease(g_d3dDeviceContext);
+
+    //ID3D11Debug *d3dDebug = nullptr;
+    //if (SUCCEEDED(g_d3dDevice->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3dDebug)))
+    //{
+    //    d3dDebug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+    //    d3dDebug->Release();
+    //}
+
     SafeRelease(g_d3dDevice);
 }
 
