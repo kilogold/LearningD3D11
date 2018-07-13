@@ -1,12 +1,4 @@
-cbuffer PerApplication : register( b0 )
-{
-}
- 
-cbuffer PerFrame : register( b1 )
-{
-}
- 
-cbuffer PerObject : register( b2 )
+cbuffer PerObject : register( b0 )
 {
     matrix worldMatrix;
     matrix inverseTransposeWorldMatrix;

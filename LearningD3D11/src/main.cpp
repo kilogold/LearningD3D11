@@ -121,10 +121,10 @@ WORD g_Indicies[36] =
 // Vertices for a unit plane.
 VertexPosNormColTex g_PlaneVerts[4] =
 {
-	{ XMFLOAT3(-0.5f, 0.0f,  0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(0.6f, 0.1f, 0.3f), XMFLOAT2(0.0f, 0.0f) }, // 0
-	{ XMFLOAT3(0.5f, 0.0f,  0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f),  XMFLOAT3(0.6f, 0.1f, 0.3f), XMFLOAT2(1.0f, 0.0f) }, // 1
-	{ XMFLOAT3(0.5f, 0.0f, -0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f),  XMFLOAT3(0.6f, 0.1f, 0.3f), XMFLOAT2(1.0f, 1.0f) }, // 2
-	{ XMFLOAT3(-0.5f, 0.0f, -0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(0.6f, 0.1f, 0.3f), XMFLOAT2(0.0f, 1.0f) }  // 3
+	{ XMFLOAT3(-0.5f, 0.0f,  0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT2(0.0f, 0.0f) }, // 0
+	{ XMFLOAT3(0.5f, 0.0f,  0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f),  XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT2(1.0f, 0.0f) }, // 1
+	{ XMFLOAT3(0.5f, 0.0f, -0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(1.0f, 1.0f) }, // 2
+	{ XMFLOAT3(-0.5f, 0.0f, -0.5f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(0.0f, 1.0f) }  // 3
 };
 
 // Index buffer for the unit plane.
@@ -434,151 +434,166 @@ bool LoadContent()
 {
 	assert(g_d3dDevice);
 
-	// Create an initialize the vertex buffer.
-	D3D11_BUFFER_DESC vertexBufferDesc;
-	ZeroMemory(&vertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
-
-	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vertexBufferDesc.ByteWidth = sizeof(VertexPosNormColTex) * _countof(g_Vertices);
-	vertexBufferDesc.CPUAccessFlags = 0;
-	vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-
 	D3D11_SUBRESOURCE_DATA resourceData;
 	ZeroMemory(&resourceData, sizeof(D3D11_SUBRESOURCE_DATA));
 
-	resourceData.pSysMem = g_Vertices;
+	HRESULT hr;
 
-	HRESULT hr = g_d3dDevice->CreateBuffer(&vertexBufferDesc, &resourceData, &g_d3dVertexBuffer);
-	if (FAILED(hr))
-	{
-		return false;
+	{// Create an initialize the simple vertex buffer.
+		D3D11_BUFFER_DESC vertexBufferDesc;
+		ZeroMemory(&vertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
+
+		vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		vertexBufferDesc.ByteWidth = sizeof(VertexPosNormColTex) * _countof(g_Vertices);
+		vertexBufferDesc.CPUAccessFlags = 0;
+		vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+
+		resourceData.pSysMem = g_Vertices;
+
+		hr = g_d3dDevice->CreateBuffer(&vertexBufferDesc, &resourceData, &g_d3dVertexBuffer);
+		if (FAILED(hr))
+		{
+			MessageBoxA(nullptr, "Failed to create vertex buffer for simple vertex shader.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
 	}
 
-	// Create and initialize the index buffer.
-	D3D11_BUFFER_DESC indexBufferDesc;
-	ZeroMemory(&indexBufferDesc, sizeof(D3D11_BUFFER_DESC));
+	{// Create and initialize the simple index buffer.
+		D3D11_BUFFER_DESC indexBufferDesc;
+		ZeroMemory(&indexBufferDesc, sizeof(D3D11_BUFFER_DESC));
 
-	indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	indexBufferDesc.ByteWidth = sizeof(WORD) * _countof(g_Indicies);
-	indexBufferDesc.CPUAccessFlags = 0;
-	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	resourceData.pSysMem = g_Indicies;
+		indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		indexBufferDesc.ByteWidth = sizeof(WORD) * _countof(g_Indicies);
+		indexBufferDesc.CPUAccessFlags = 0;
+		indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+		resourceData.pSysMem = g_Indicies;
 
-	hr = g_d3dDevice->CreateBuffer(&indexBufferDesc, &resourceData, &g_d3dIndexBuffer);
-	if (FAILED(hr))
-	{
-		return false;
+		hr = g_d3dDevice->CreateBuffer(&indexBufferDesc, &resourceData, &g_d3dIndexBuffer);
+		if (FAILED(hr))
+		{
+			MessageBoxA(nullptr, "Failed to create index buffer for simple vertex shader.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
 	}
 
-	// Create the constant buffers for the variables defined in the vertex shader.
-	D3D11_BUFFER_DESC constantBufferDesc;
-	ZeroMemory(&constantBufferDesc, sizeof(D3D11_BUFFER_DESC));
+	{// Create the constant buffers for the variables defined in the vertex shaders.
+		D3D11_BUFFER_DESC constantBufferDesc;
+		ZeroMemory(&constantBufferDesc, sizeof(D3D11_BUFFER_DESC));
 
-	constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	constantBufferDesc.ByteWidth = sizeof(XMMATRIX);
-	constantBufferDesc.CPUAccessFlags = 0;
-	constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.ByteWidth = sizeof(XMMATRIX);
+		constantBufferDesc.CPUAccessFlags = 0;
+		constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
 
-	hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dConstantBuffers[CB_Frame]);
-	if (FAILED(hr))
-	{
-		return false;
+		hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dConstantBuffers[CB_Frame]);
+		if (FAILED(hr))
+		{
+			MessageBoxA(nullptr, "Failed to create instanced vertex shader cbuffer.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.ByteWidth = sizeof(PerObjectTransformData);
+		constantBufferDesc.CPUAccessFlags = 0;
+		constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+
+		hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dConstantBuffers[CB_Object]);
+		if (FAILED(hr))
+		{
+			MessageBoxA(nullptr, "Failed to create simple vertex shader cbuffer.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
 	}
 
-	constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	constantBufferDesc.ByteWidth = sizeof(PerObjectTransformData);
-	constantBufferDesc.CPUAccessFlags = 0;
-	constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-
-	hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dConstantBuffers[CB_Object]);
-	if (FAILED(hr))
-	{
-		return false;
-	}
-
-	// Load the compiled vertex shader.
-	ID3DBlob* vertexShaderBlob;
+	{// Load the compiled vertex shader.
+		ID3DBlob* vertexShaderBlob;
 #if _DEBUG
-	LPCWSTR compiledVertexShaderObject = L"SimpleVertexShader_d.cso";
+		LPCWSTR compiledVertexShaderObject = L"SimpleVertexShader_d.cso";
 #else
-	LPCWSTR compiledVertexShaderObject = L"SimpleVertexShader.cso";
+		LPCWSTR compiledVertexShaderObject = L"SimpleVertexShader.cso";
 #endif
 
-	hr = D3DReadFileToBlob(compiledVertexShaderObject, &vertexShaderBlob);
-	if (FAILED(hr))
-	{
-		return false;
+		hr = D3DReadFileToBlob(compiledVertexShaderObject, &vertexShaderBlob);
+		if (FAILED(hr))
+		{
+			return false;
+		}
+
+		hr = g_d3dDevice->CreateVertexShader(vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), nullptr, &g_d3dVertexShader);
+		if (FAILED(hr))
+		{
+			return false;
+		}
+
+		{// Create the input layout for the simple vertex shader.
+			D3D11_INPUT_ELEMENT_DESC vertexLayoutDesc[] =
+			{
+				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			};
+
+			hr = g_d3dDevice->CreateInputLayout(vertexLayoutDesc, _countof(vertexLayoutDesc), vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &g_d3dInputLayout);
+			if (FAILED(hr))
+			{
+				return false;
+			}
+
+			SafeRelease(vertexShaderBlob);
+		}
 	}
 
-	hr = g_d3dDevice->CreateVertexShader(vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), nullptr, &g_d3dVertexShader);
-	if (FAILED(hr))
-	{
-		return false;
-	}
-
-	// Create the input layout for the vertex shader.
-	D3D11_INPUT_ELEMENT_DESC vertexLayoutDesc[] =
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-	};
-
-	hr = g_d3dDevice->CreateInputLayout(vertexLayoutDesc, _countof(vertexLayoutDesc), vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &g_d3dInputLayout);
-	if (FAILED(hr))
-	{
-		return false;
-	}
-
-	SafeRelease(vertexShaderBlob);
-
-	// Load the compiled pixel shader.
-	ID3DBlob* pixelShaderBlob;
+	{// Load the compiled pixel shader.
+		ID3DBlob* pixelShaderBlob;
 #if _DEBUG
-	LPCWSTR compiledPixelShaderObject = L"SimplePixelShader_d.cso";
+		LPCWSTR compiledPixelShaderObject = L"SimplePixelShader_d.cso";
 #else
-	LPCWSTR compiledPixelShaderObject = L"SimplePixelShader.cso";
+		LPCWSTR compiledPixelShaderObject = L"SimplePixelShader.cso";
 #endif
 
-	hr = D3DReadFileToBlob(compiledPixelShaderObject, &pixelShaderBlob);
-	if (FAILED(hr))
-	{
-		return false;
+		hr = D3DReadFileToBlob(compiledPixelShaderObject, &pixelShaderBlob);
+		if (FAILED(hr))
+		{
+			MessageBoxA(g_WindowHandle, "Failed to load pixel shader blob.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		hr = g_d3dDevice->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &g_d3dPixelShader);
+		if (FAILED(hr))
+		{
+			MessageBoxA(g_WindowHandle, "Failed to create pixel shader.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		SafeRelease(pixelShaderBlob);
 	}
 
-	hr = g_d3dDevice->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &g_d3dPixelShader);
-	if (FAILED(hr))
-	{
-		return false;
+	{// Setup the projection matrix.
+		RECT clientRect;
+		GetClientRect(g_WindowHandle, &clientRect);
+
+		// Compute the exact client dimensions.
+		// This is required for a correct projection matrix.
+		float clientWidth = static_cast<float>(clientRect.right - clientRect.left);
+		float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top);
+
+		g_ProjectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), clientWidth / clientHeight, 0.1f, 100.0f);
 	}
 
-	SafeRelease(pixelShaderBlob);
+	{// Load textures
+		auto effectFactory = std::unique_ptr<EffectFactory>(new EffectFactory(g_d3dDevice));
+		effectFactory->SetDirectory(L"..\\assets");
 
-	// Setup the projection matrix.
-	RECT clientRect;
-	GetClientRect(g_WindowHandle, &clientRect);
-
-	// Compute the exact client dimensions.
-	// This is required for a correct projection matrix.
-	float clientWidth = static_cast<float>(clientRect.right - clientRect.left);
-	float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top);
-
-	g_ProjectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), clientWidth / clientHeight, 0.1f, 100.0f);
-
-	// Load textures
-	auto effectFactory = std::unique_ptr<EffectFactory>(new EffectFactory(g_d3dDevice));
-	effectFactory->SetDirectory(L"..\\assets");
-
-	try
-	{
-		effectFactory->CreateTexture(L"container.jpg", g_d3dDeviceContext, &g_textureShaderResourceView);
+		try
+		{
+			effectFactory->CreateTexture(L"container.jpg", g_d3dDeviceContext, &g_textureShaderResourceView);
+		}
+		catch (std::exception&)
+		{
+			MessageBoxA(nullptr, "Failed to load texture.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
 	}
-	catch (std::exception&)
-	{
-		MessageBoxA(nullptr, "Failed to load texture.", "Error", MB_OK | MB_ICONERROR);
-		return false;
-	}
-
 
 	{// Create and setup the per-instance buffer data
 
@@ -705,11 +720,11 @@ bool LoadContent()
 
 	{ // Load the compiled instanced vertex shader.
 		ID3DBlob* instancedVertexShaderBlob;
-		#if _DEBUG
+#if _DEBUG
 		LPCWSTR compiledInstancedVertexShaderObject = L"InstancedVertexShader_d.cso";
-		#else
+#else
 		LPCWSTR compiledInstancedVertexShaderObject = L"InstancedVertexShader.cso";
-		#endif
+#endif
 
 		hr = D3DReadFileToBlob(compiledInstancedVertexShaderObject, &instancedVertexShaderBlob);
 		if (FAILED(hr))
@@ -759,57 +774,50 @@ bool LoadContent()
 
 void Update(float deltaTime)
 {
-
-	//auto currentTime = std::chrono::steady_clock::now();
-	//static auto previousTime = currentTime;
-	//auto elapsed = previousTime - currentTime;
-	//float elapsed_f = elapsed.count();
-	//previousTime = currentTime;
-
-
 	static XMVECTOR eyePosition = XMVectorSet(0, -5, -10, 1);
+	const float speed = 4.0f;
 	if (GetKeyState('A') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetX(eyePosition, XMVectorGetX(eyePosition) - 0.1f);
+		eyePosition = XMVectorSetX(eyePosition, XMVectorGetX(eyePosition) - speed * deltaTime);
 	}
 	if (GetKeyState('D') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetX(eyePosition, XMVectorGetX(eyePosition) + 0.1f);
+		eyePosition = XMVectorSetX(eyePosition, XMVectorGetX(eyePosition) + speed * deltaTime);
 	}
 	if (GetKeyState('Q') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetY(eyePosition, XMVectorGetY(eyePosition) - 0.1f);
+		eyePosition = XMVectorSetY(eyePosition, XMVectorGetY(eyePosition) - speed * deltaTime);
 	}
 	if (GetKeyState('E') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetY(eyePosition, XMVectorGetY(eyePosition) + 0.1f);
+		eyePosition = XMVectorSetY(eyePosition, XMVectorGetY(eyePosition) + speed * deltaTime);
 	}
 	if (GetKeyState('W') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) + 0.1f);
+		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) + speed * deltaTime);
 	}
 	if (GetKeyState('S') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) - 0.1f);
+		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) - speed * deltaTime);
 	}
 
 	XMVECTOR focusPoint = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) + 0.1f);
     XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
     g_ViewMatrix = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
 
+	const XMMATRIX viewProjectionMatrix = g_ViewMatrix * g_ProjectionMatrix;
+	g_PerFrameTransformData.ViewProjectionMatrix = viewProjectionMatrix;
+
+
     //static float angle = 0.0f;
     //angle += 90.0f * deltaTime;
     //XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
     //g_WorldMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
 
-	const XMMATRIX viewProjectionMatrix = g_ViewMatrix * g_ProjectionMatrix;
-	g_PerFrameTransformData.ViewProjectionMatrix = viewProjectionMatrix;
-
     //g_PerObjTransformData.WorldMatrix = g_WorldMatrix;
     //g_PerObjTransformData.WorldViewProjectMatrix = XMMatrixMultiply(g_WorldMatrix, viewProjectionMatrix);
     //g_PerObjTransformData.InverseTransposeWorldMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, g_WorldMatrix));
     
-	g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Frame], 0, nullptr, &g_PerFrameTransformData, 0, 0);
     //g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Object], 0, nullptr, &g_PerObjTransformData, 0, 0);
 }
 
@@ -839,12 +847,11 @@ void Render()
 
     Clear(Colors::CornflowerBlue, 1.0f, 0);
 
-
-	const UINT vertexStride[2] = { sizeof(VertexPosNormColTex), sizeof(PlaneInstanceData) };
-	const UINT offset[2] = { 0, 0 };
-	ID3D11Buffer* buffers[2] = { g_d3dInstancedVertexBuffer_Vertices, g_d3dInstancedVertexBuffer_Instances };
-
 	{ // Instanced render walls.
+		const UINT vertexStride[2] = { sizeof(VertexPosNormColTex), sizeof(PlaneInstanceData) };
+		const UINT offset[2] = { 0, 0 };
+		ID3D11Buffer* buffers[2] = { g_d3dInstancedVertexBuffer_Vertices, g_d3dInstancedVertexBuffer_Instances };
+
 		g_d3dDeviceContext->IASetVertexBuffers(0, 2, buffers, vertexStride, offset);
 		g_d3dDeviceContext->IASetInputLayout(g_d3dInstancedInputLayout);
 		g_d3dDeviceContext->IASetIndexBuffer(g_d3dInstancedIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
@@ -860,6 +867,8 @@ void Render()
 
 		g_d3dDeviceContext->RSSetState(g_d3dRasterizerState);
 		g_d3dDeviceContext->RSSetViewports(1, &g_Viewport);
+
+		g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Frame], 0, nullptr, &g_PerFrameTransformData, 0, 0);
 
 		g_d3dDeviceContext->DrawIndexedInstanced(_countof(g_PlaneIndex), 6, 0, 0, 0);
 	}
