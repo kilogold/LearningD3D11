@@ -40,6 +40,7 @@
     <FxCompile Include="shaders\InstancedVertexShader.hlsl">
       <Filter>Resource Files</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\UnlitPixelShader.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

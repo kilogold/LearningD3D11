@@ -1,8 +1,11 @@
 #include <DirectXTemplate.h>
 #include <algorithm>
 #include <chrono>
+#include <vector>
 #include <memory>
 #include "Effects.h"
+#define MAX_LIGHTS 8
+
 using namespace DirectX;
 
 const LONG g_WindowWidth = 1280;
@@ -38,17 +41,20 @@ D3D11_VIEWPORT g_Viewport = { 0 };
 
 // Vertex buffer data
 ID3D11InputLayout* g_d3dInputLayout = nullptr;
-ID3D11Buffer* g_d3dVertexBuffer = nullptr;
-ID3D11Buffer* g_d3dIndexBuffer = nullptr;
+ID3D11Buffer* g_d3dSimpleVertexBuffer = nullptr;
+ID3D11Buffer* g_d3dSimpleIndexBuffer = nullptr;
 ID3D11InputLayout* g_d3dInstancedInputLayout = nullptr;
 ID3D11Buffer* g_d3dInstancedVertexBuffer_Instances = nullptr;
 ID3D11Buffer* g_d3dInstancedVertexBuffer_Vertices = nullptr;
 ID3D11Buffer* g_d3dInstancedIndexBuffer = nullptr;
+ID3D11Buffer* g_d3dLightPropertiesConstantBuffer = nullptr;
+ID3D11Buffer* g_d3dMaterialPropertiesConstantBuffer = nullptr;
 
 // Shader data
 ID3D11VertexShader* g_d3dVertexShader = nullptr;
 ID3D11VertexShader* g_d3dInstancedVertexShader = nullptr;
 ID3D11PixelShader* g_d3dPixelShader = nullptr;
+ID3D11PixelShader* g_d3dUnlitPixelShader = nullptr;
 
 
 // Shader resources
@@ -62,7 +68,6 @@ enum ConstanBuffer
 ID3D11Buffer* g_d3dConstantBuffers[NumConstantBuffers];
 
 // Demo parameters
-XMMATRIX g_WorldMatrix;
 XMMATRIX g_ViewMatrix;
 XMMATRIX g_ProjectionMatrix;
 
@@ -95,6 +100,99 @@ struct PerFrameConstantBufferData
 {
 	XMMATRIX ViewProjectionMatrix;
 } g_PerFrameTransformData;
+
+struct alignas(16) _Material
+{
+	_Material()
+		: Emissive(0.0f, 0.0f, 0.0f, 1.0f)
+		, Ambient(0.1f, 0.1f, 0.1f, 1.0f)
+		, Diffuse(1.0f, 1.0f, 1.0f, 1.0f)
+		, Specular(1.0f, 1.0f, 1.0f, 1.0f)
+		, SpecularPower(128.0f)
+		, UseTexture(false)
+	{}
+
+	DirectX::XMFLOAT4 Emissive;
+	//----------------------------------- (16 byte boundary)
+	DirectX::XMFLOAT4 Ambient;
+	//----------------------------------- (16 byte boundary)
+	DirectX::XMFLOAT4 Diffuse;
+	//----------------------------------- (16 byte boundary)
+	DirectX::XMFLOAT4 Specular;
+	//----------------------------------- (16 byte boundary)
+	float SpecularPower;
+	// Add some padding complete the 16 byte boundary.
+	int UseTexture;
+	// Add some padding to complete the 16 byte boundary.
+	float Padding[2];
+	//----------------------------------- (16 byte boundary)
+	// Total:                                80 bytes (5 * 16)
+};
+
+struct MaterialProperties
+{
+	_Material Material;
+};
+
+enum LightType
+{
+	DirectionalLight = 0,
+	PointLight = 1,
+	SpotLight = 2
+};
+
+struct Light
+{
+	Light()
+		: Position(0.0f, 0.0f, 0.0f, 1.0f)
+		, Direction(0.0f, 0.0f, 1.0f, 0.0f)
+		, Color(1.0f, 1.0f, 1.0f, 1.0f)
+		, SpotAngle(DirectX::XM_PIDIV2)
+		, ConstantAttenuation(1.0f)
+		, LinearAttenuation(0.0f)
+		, QuadraticAttenuation(0.0f)
+		, LightType(DirectionalLight)
+		, Enabled(0)
+	{}
+
+	DirectX::XMFLOAT4    Position;
+	//----------------------------------- (16 byte boundary)
+	DirectX::XMFLOAT4    Direction;
+	//----------------------------------- (16 byte boundary)
+	DirectX::XMFLOAT4    Color;
+	//----------------------------------- (16 byte boundary)
+	float       SpotAngle;
+	float       ConstantAttenuation;
+	float       LinearAttenuation;
+	float       QuadraticAttenuation;
+	//----------------------------------- (16 byte boundary)
+	int         LightType;
+	int         Enabled;
+	// Add some padding to make this struct size a multiple of 16 bytes.
+	int         Padding[2];
+	//----------------------------------- (16 byte boundary)
+};  // Total:                              80 bytes ( 5 * 16 )
+
+struct alignas(16) LightProperties
+{
+	LightProperties()
+		: EyePosition(0.0f, 0.0f, 0.0f, 1.0f)
+		, GlobalAmbient(0.2f, 0.2f, 0.8f, 1.0f)
+	{}
+
+	DirectX::XMFLOAT4   EyePosition;
+	//----------------------------------- (16 byte boundary)
+	DirectX::XMFLOAT4   GlobalAmbient;
+	//----------------------------------- (16 byte boundary)
+	Light               Lights[MAX_LIGHTS]; // 80 * 8 bytes
+	//----------------------------------- (16 byte boundary)
+	int PhongShadingMode;
+	int Padding[3];
+	//----------------------------------- (16 byte boundary)
+	// Total:                             672 bytes (42 * 16)
+} g_LightProperties;  
+
+std::vector<MaterialProperties> g_MaterialProperties;
 
 VertexPosNormColTex g_Vertices[8] =
 {
@@ -450,7 +548,7 @@ bool LoadContent()
 
 		resourceData.pSysMem = g_Vertices;
 
-		hr = g_d3dDevice->CreateBuffer(&vertexBufferDesc, &resourceData, &g_d3dVertexBuffer);
+		hr = g_d3dDevice->CreateBuffer(&vertexBufferDesc, &resourceData, &g_d3dSimpleVertexBuffer);
 		if (FAILED(hr))
 		{
 			MessageBoxA(nullptr, "Failed to create vertex buffer for simple vertex shader.", "Error", MB_OK | MB_ICONERROR);
@@ -468,7 +566,7 @@ bool LoadContent()
 		indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
 		resourceData.pSysMem = g_Indicies;
 
-		hr = g_d3dDevice->CreateBuffer(&indexBufferDesc, &resourceData, &g_d3dIndexBuffer);
+		hr = g_d3dDevice->CreateBuffer(&indexBufferDesc, &resourceData, &g_d3dSimpleIndexBuffer);
 		if (FAILED(hr))
 		{
 			MessageBoxA(nullptr, "Failed to create index buffer for simple vertex shader.", "Error", MB_OK | MB_ICONERROR);
@@ -566,6 +664,31 @@ bool LoadContent()
 		}
 
 		SafeRelease(pixelShaderBlob);
+	}
+
+	{// Load the compiled unlit pixel shader.
+		ID3DBlob* unlitPixelShaderBlob;
+#if _DEBUG
+		LPCWSTR compiledUnlitPixelShaderObject = L"UnlitPixelShader_d.cso";
+#else
+		LPCWSTR compiledUnlitPixelShaderObject = L"UnlitPixelShader.cso";
+#endif
+
+		hr = D3DReadFileToBlob(compiledUnlitPixelShaderObject, &unlitPixelShaderBlob);
+		if (FAILED(hr))
+		{
+			MessageBoxA(g_WindowHandle, "Failed to load pixel shader blob.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		hr = g_d3dDevice->CreatePixelShader(unlitPixelShaderBlob->GetBufferPointer(), unlitPixelShaderBlob->GetBufferSize(), nullptr, &g_d3dUnlitPixelShader);
+		if (FAILED(hr))
+		{
+			MessageBoxA(g_WindowHandle, "Failed to create pixel shader.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		SafeRelease(unlitPixelShaderBlob);
 	}
 
 	{// Setup the projection matrix.
@@ -769,12 +892,84 @@ bool LoadContent()
 		SafeRelease(instancedVertexShaderBlob);
 	}
 
+	{// Create some materials
+		MaterialProperties defaultMaterial;
+		g_MaterialProperties.push_back(defaultMaterial);
+
+		MaterialProperties greenMaterial;
+		greenMaterial.Material.Ambient = XMFLOAT4(0.07568f, 0.61424f, 0.07568f, 1.0f);
+		greenMaterial.Material.Diffuse = XMFLOAT4(0.07568f, 0.61424f, 0.07568f, 1.0f);
+		greenMaterial.Material.Specular = XMFLOAT4(0.07568f, 0.61424f, 0.07568f, 1.0f);
+		greenMaterial.Material.SpecularPower = 76.8f;
+		g_MaterialProperties.push_back(greenMaterial);
+
+		MaterialProperties redPlasticMaterial;
+		redPlasticMaterial.Material.Diffuse = XMFLOAT4(0.6f, 0.1f, 0.1f, 1.0f);
+		redPlasticMaterial.Material.Specular = XMFLOAT4(1.0f, 0.2f, 0.2f, 1.0f);
+		redPlasticMaterial.Material.SpecularPower = 32.0f;
+		g_MaterialProperties.push_back(redPlasticMaterial);
+
+		MaterialProperties pearlMaterial;
+		pearlMaterial.Material.Ambient = XMFLOAT4(0.25f, 0.20725f, 0.20725f, 1.0f);
+		pearlMaterial.Material.Diffuse = XMFLOAT4(1.0f, 0.829f, 0.829f, 1.0f);
+		pearlMaterial.Material.Specular = XMFLOAT4(0.296648f, 0.296648f, 0.296648f, 1.0f);
+		pearlMaterial.Material.SpecularPower = 11.264f;
+		g_MaterialProperties.push_back(pearlMaterial);
+	}
+
+	{// Set a light
+		Light light;
+		light.Enabled = true;
+		light.LightType = LightType::PointLight;
+		light.Color = XMFLOAT4(Colors::White);
+		light.SpotAngle = XMConvertToRadians(45.0f);
+		light.ConstantAttenuation = 1.0f;
+		light.LinearAttenuation = 0.08f;
+		light.QuadraticAttenuation = 0.0f;
+		XMFLOAT4 LightPosition = XMFLOAT4(0, 12.0f, 0, 1.0f);
+		light.Position = LightPosition;
+		g_LightProperties.Lights[0] = light;
+	}
+
+	{// Create constant buffer for light data
+		D3D11_BUFFER_DESC constantBufferDesc;
+		ZeroMemory(&constantBufferDesc, sizeof(D3D11_BUFFER_DESC));
+
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.ByteWidth = sizeof(LightProperties);
+		constantBufferDesc.CPUAccessFlags = 0;
+		constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+
+		hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dLightPropertiesConstantBuffer);
+		if (FAILED(hr))
+		{
+			MessageBoxA(nullptr, "Failed to create lights cbuffer.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+	}
+
+	{ // Create constant buffer for materials 
+		D3D11_BUFFER_DESC constantBufferDesc;
+		ZeroMemory(&constantBufferDesc, sizeof(D3D11_BUFFER_DESC));
+
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.ByteWidth = sizeof(MaterialProperties);
+		constantBufferDesc.CPUAccessFlags = 0;
+		constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+
+		hr = g_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &g_d3dMaterialPropertiesConstantBuffer);
+		if (FAILED(hr))
+		{
+			MessageBoxA(nullptr, "Failed to create lights cbuffer.", "Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+	}
     return true;
 }
 
 void Update(float deltaTime)
 {
-	static XMVECTOR eyePosition = XMVectorSet(0, -5, -10, 1);
+	static XMVECTOR eyePosition = XMVectorSet(0, 5, -10, 1);
 	const float speed = 4.0f;
 	if (GetKeyState('A') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
@@ -800,6 +995,9 @@ void Update(float deltaTime)
 	{
 		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) - speed * deltaTime);
 	}
+	g_LightProperties.EyePosition.x = XMVectorGetX(eyePosition);
+	g_LightProperties.EyePosition.y = XMVectorGetY(eyePosition);
+	g_LightProperties.EyePosition.z = XMVectorGetZ(eyePosition);
 
 	XMVECTOR focusPoint = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) + 0.1f);
     XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
@@ -808,17 +1006,15 @@ void Update(float deltaTime)
 	const XMMATRIX viewProjectionMatrix = g_ViewMatrix * g_ProjectionMatrix;
 	g_PerFrameTransformData.ViewProjectionMatrix = viewProjectionMatrix;
 
+    static float angle = 0.0f;
+    angle += 90.0f * deltaTime;
+    XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
+	const XMMATRIX rotationMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
+	const XMMATRIX translation = XMMatrixTranslation(0, 10.f, 0);
 
-    //static float angle = 0.0f;
-    //angle += 90.0f * deltaTime;
-    //XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
-    //g_WorldMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
-
-    //g_PerObjTransformData.WorldMatrix = g_WorldMatrix;
-    //g_PerObjTransformData.WorldViewProjectMatrix = XMMatrixMultiply(g_WorldMatrix, viewProjectionMatrix);
-    //g_PerObjTransformData.InverseTransposeWorldMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, g_WorldMatrix));
-    
-    //g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Object], 0, nullptr, &g_PerObjTransformData, 0, 0);
+	g_PerObjTransformData.WorldMatrix = rotationMatrix * translation;
+    g_PerObjTransformData.WorldViewProjectMatrix = g_PerObjTransformData.WorldMatrix * viewProjectionMatrix;
+    g_PerObjTransformData.InverseTransposeWorldMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, g_PerObjTransformData.WorldMatrix));
 }
 
 // Clear the color and depth buffers.
@@ -846,6 +1042,19 @@ void Render()
     assert(g_d3dDeviceContext);
 
     Clear(Colors::CornflowerBlue, 1.0f, 0);
+		
+	{// Set common render states used in all draw calls.
+		g_d3dDeviceContext->OMSetRenderTargets(1, &g_d3dRenderTargetView, g_d3dDepthStencilView);
+		g_d3dDeviceContext->OMSetDepthStencilState(g_d3dDepthStencilState, 0);
+		g_d3dDeviceContext->RSSetState(g_d3dRasterizerState);
+		g_d3dDeviceContext->RSSetViewports(1, &g_Viewport);
+		g_d3dDeviceContext->PSSetShader(g_d3dPixelShader, nullptr, 0);
+		g_d3dDeviceContext->UpdateSubresource(g_d3dLightPropertiesConstantBuffer, 0, nullptr, &g_LightProperties, 0, 0);
+		g_d3dDeviceContext->PSSetConstantBuffers(1, 1, &g_d3dLightPropertiesConstantBuffer);
+
+		g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Frame], 0, nullptr, &g_PerFrameTransformData, 0, 0);
+		g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Object], 0, nullptr, &g_PerObjTransformData, 0, 0);
+	}
 
 	{ // Instanced render walls.
 		const UINT vertexStride[2] = { sizeof(VertexPosNormColTex), sizeof(PlaneInstanceData) };
@@ -860,40 +1069,49 @@ void Render()
 		g_d3dDeviceContext->VSSetShader(g_d3dInstancedVertexShader, nullptr, 0);
 		g_d3dDeviceContext->VSSetConstantBuffers(0, 1, &g_d3dConstantBuffers[CB_Frame]);
 
-		g_d3dDeviceContext->PSSetShader(g_d3dPixelShader, nullptr, 0);
-
-		g_d3dDeviceContext->OMSetRenderTargets(1, &g_d3dRenderTargetView, g_d3dDepthStencilView);
-		g_d3dDeviceContext->OMSetDepthStencilState(g_d3dDepthStencilState, 0);
-
-		g_d3dDeviceContext->RSSetState(g_d3dRasterizerState);
-		g_d3dDeviceContext->RSSetViewports(1, &g_Viewport);
-
-		g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Frame], 0, nullptr, &g_PerFrameTransformData, 0, 0);
+		g_d3dDeviceContext->UpdateSubresource(g_d3dMaterialPropertiesConstantBuffer, 0, nullptr, &g_MaterialProperties[1], 0, 0);
+		
+		g_d3dDeviceContext->PSSetConstantBuffers(0, 1, &g_d3dMaterialPropertiesConstantBuffer);
 
 		g_d3dDeviceContext->DrawIndexedInstanced(_countof(g_PlaneIndex), 6, 0, 0, 0);
 	}
-    //const UINT vertexStride = sizeof(VertexPosNormColTex);
-    //const UINT offset = 0;
 
-    //g_d3dDeviceContext->IASetVertexBuffers(0, 1, &g_d3dVertexBuffer, &vertexStride, &offset);
-    //g_d3dDeviceContext->IASetInputLayout(g_d3dInputLayout);
-    //g_d3dDeviceContext->IASetIndexBuffer(g_d3dIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
-    //g_d3dDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	{ // Render Cubes
+		{ // Spinning Cube
+			const UINT vertexStride = sizeof(VertexPosNormColTex);
+			const UINT offset = 0;
 
-    //g_d3dDeviceContext->VSSetShader(g_d3dVertexShader, nullptr, 0);
-    //g_d3dDeviceContext->VSSetConstantBuffers(0, 3, g_d3dConstantBuffers);
+			g_d3dDeviceContext->IASetVertexBuffers(0, 1, &g_d3dSimpleVertexBuffer, &vertexStride, &offset);
+			g_d3dDeviceContext->IASetInputLayout(g_d3dInputLayout);
+			g_d3dDeviceContext->IASetIndexBuffer(g_d3dSimpleIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+			g_d3dDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    //g_d3dDeviceContext->RSSetState(g_d3dRasterizerState);
-    //g_d3dDeviceContext->RSSetViewports(1, &g_Viewport);
+			g_d3dDeviceContext->VSSetShader(g_d3dVertexShader, nullptr, 0);
+			g_d3dDeviceContext->VSSetConstantBuffers(0, 1, &g_d3dConstantBuffers[CB_Object]);
+			
+			g_d3dDeviceContext->UpdateSubresource(g_d3dMaterialPropertiesConstantBuffer, 0, nullptr, &g_MaterialProperties[2], 0, 0);
+			
+			g_d3dDeviceContext->PSSetConstantBuffers(0, 1, &g_d3dMaterialPropertiesConstantBuffer);
 
-    //g_d3dDeviceContext->PSSetShader(g_d3dPixelShader, nullptr, 0);
-    //g_d3dDeviceContext->PSSetSamplers(0,1,&g_d3dSamplerState);
-    //g_d3dDeviceContext->PSSetShaderResources(0, 1, &g_textureShaderResourceView);
+			g_d3dDeviceContext->DrawIndexed(_countof(g_Indicies), 0, 0);
+		}
 
-    //g_d3dDeviceContext->OMSetRenderTargets(1, &g_d3dRenderTargetView, g_d3dDepthStencilView);
-    //g_d3dDeviceContext->OMSetDepthStencilState(g_d3dDepthStencilState, 1);
+		{ // Light Cube
 
-    //g_d3dDeviceContext->DrawIndexed(_countof(g_Indicies), 0, 0);
+			const XMMATRIX worldMatrix = XMMatrixScaling(0.2f, 0.2f, 0.2f) * XMMatrixTranslation(
+																				g_LightProperties.Lights[0].Position.x,
+																				g_LightProperties.Lights[0].Position.y,
+																				g_LightProperties.Lights[0].Position.z);
+
+			g_PerObjTransformData.WorldViewProjectMatrix = worldMatrix * g_ViewMatrix * g_ProjectionMatrix;
+			g_d3dDeviceContext->UpdateSubresource(g_d3dConstantBuffers[CB_Object], 0, nullptr, &g_PerObjTransformData, 0, 0);
+
+			g_d3dDeviceContext->PSSetShader(g_d3dUnlitPixelShader, nullptr, 0);
+
+
+			g_d3dDeviceContext->DrawIndexed(_countof(g_Indicies), 0, 0);
+		}
+	}
 
     Present(g_EnableVSync);
 }
@@ -902,8 +1120,8 @@ void UnloadContent()
 {
     SafeRelease(g_d3dConstantBuffers[CB_Frame]);
     SafeRelease(g_d3dConstantBuffers[CB_Object]);
-    SafeRelease(g_d3dIndexBuffer);
-    SafeRelease(g_d3dVertexBuffer);
+    SafeRelease(g_d3dSimpleIndexBuffer);
+    SafeRelease(g_d3dSimpleVertexBuffer);
     SafeRelease(g_d3dInputLayout);
     SafeRelease(g_d3dVertexShader);
 	SafeRelease(g_d3dInstancedIndexBuffer);
@@ -911,8 +1129,11 @@ void UnloadContent()
 	SafeRelease(g_d3dInstancedVertexBuffer_Vertices);
 	SafeRelease(g_d3dInstancedInputLayout);
 	SafeRelease(g_d3dInstancedVertexShader);
-    SafeRelease(g_d3dPixelShader);
-    SafeRelease(g_textureShaderResourceView);
+	SafeRelease(g_d3dPixelShader);
+	SafeRelease(g_d3dUnlitPixelShader);
+	SafeRelease(g_textureShaderResourceView);
+	SafeRelease(g_d3dLightPropertiesConstantBuffer);
+	SafeRelease(g_d3dMaterialPropertiesConstantBuffer);
 }
 
 void Cleanup()
