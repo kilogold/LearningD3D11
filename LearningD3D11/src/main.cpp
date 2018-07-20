@@ -3,6 +3,7 @@
 #include <chrono>
 #include <vector>
 #include <memory>
+#include <iterator>
 #include "Effects.h"
 #define MAX_LIGHTS 8
 
@@ -77,14 +78,14 @@ struct VertexPosNormColTex
     XMFLOAT3 Position;
     XMFLOAT3 Normal;
     XMFLOAT3 Color;
-	XMFLOAT2 Texture;
+    XMFLOAT2 Texture;
 };
 
 // Per-instance data (must be 16 byte aligned)
 struct alignas(16) PlaneInstanceData
 {
-	XMMATRIX WorldMatrix;
-	XMMATRIX InverseTransposeWorldMatrix;
+    XMMATRIX WorldMatrix;
+    XMMATRIX InverseTransposeWorldMatrix;
 };
 
 struct alignas(16) PerObjectTransformData
@@ -98,35 +99,35 @@ struct alignas(16) PerObjectTransformData
 // defined in the vertex shader.
 struct PerFrameConstantBufferData
 {
-	XMMATRIX ViewProjectionMatrix;
+    XMMATRIX ViewProjectionMatrix;
 } g_PerFrameTransformData;
 
 struct alignas(16) _Material
 {
-	_Material()
-		: Emissive(0.0f, 0.0f, 0.0f, 1.0f)
-		, Ambient(0.1f, 0.1f, 0.1f, 1.0f)
-		, Diffuse(1.0f, 1.0f, 1.0f, 1.0f)
-		, Specular(1.0f, 1.0f, 1.0f, 1.0f)
-		, SpecularPower(128.0f)
-		, UseTexture(false)
-	{}
+    _Material()
+        : Emissive(0.0f, 0.0f, 0.0f, 1.0f)
+        , Ambient(0.1f, 0.1f, 0.1f, 1.0f)
+        , Diffuse(1.0f, 1.0f, 1.0f, 1.0f)
+        , Specular(1.0f, 1.0f, 1.0f, 1.0f)
+        , SpecularPower(128.0f)
+        , UseTexture(false)
+    {}
 
-	DirectX::XMFLOAT4 Emissive;
-	//----------------------------------- (16 byte boundary)
-	DirectX::XMFLOAT4 Ambient;
-	//----------------------------------- (16 byte boundary)
-	DirectX::XMFLOAT4 Diffuse;
-	//----------------------------------- (16 byte boundary)
-	DirectX::XMFLOAT4 Specular;
-	//----------------------------------- (16 byte boundary)
-	float SpecularPower;
-	// Add some padding complete the 16 byte boundary.
-	int UseTexture;
-	// Add some padding to complete the 16 byte boundary.
-	float Padding[2];
-	//----------------------------------- (16 byte boundary)
-	// Total:                                80 bytes (5 * 16)
+    DirectX::XMFLOAT4 Emissive;
+    //----------------------------------- (16 byte boundary)
+    DirectX::XMFLOAT4 Ambient;
+    //----------------------------------- (16 byte boundary)
+    DirectX::XMFLOAT4 Diffuse;
+    //----------------------------------- (16 byte boundary)
+    DirectX::XMFLOAT4 Specular;
+    //----------------------------------- (16 byte boundary)
+    float SpecularPower;
+    // Add some padding complete the 16 byte boundary.
+    int UseTexture;
+    // Add some padding to complete the 16 byte boundary.
+    float Padding[2];
+    //----------------------------------- (16 byte boundary)
+    // Total:                                80 bytes (5 * 16)
 };
 
 struct MaterialProperties
@@ -194,27 +195,9 @@ struct alignas(16) LightProperties
 
 std::vector<MaterialProperties> g_MaterialProperties;
 
-VertexPosNormColTex g_Vertices[8] =
-{
-    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT2(1,0) }, // 0
-    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT2(1,1) }, // 1
-    { XMFLOAT3(1.0f,  1.0f, -1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 0.0f),  XMFLOAT2(0,1) }, // 2
-    { XMFLOAT3(1.0f, -1.0f, -1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.0f, 0.0f),  XMFLOAT2(0,0) }, // 3
-    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT2(0,0) }, // 4
-    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT2(0,1) }, // 5
-    { XMFLOAT3(1.0f,  1.0f,  1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 1.0f),  XMFLOAT2(1,1) }, // 6
-    { XMFLOAT3(1.0f, -1.0f,  1.0f),  XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.0f, 1.0f),  XMFLOAT2(1,0) }  // 7
-};
-
-WORD g_Indicies[36] =
-{
-    0, 1, 2, 0, 2, 3,
-    4, 6, 5, 4, 7, 6,
-    4, 5, 1, 4, 1, 0,
-    3, 2, 6, 3, 6, 7,
-    1, 5, 6, 1, 6, 2,
-    4, 0, 3, 4, 3, 7
-};
+VertexPosNormColTex* g_Vertices;
+WORD* g_Indicies;
+int g_VerticesLength, g_IndicesLength;
 
 // Vertices for a unit plane.
 VertexPosNormColTex g_PlaneVerts[4] =
@@ -243,6 +226,104 @@ void UnloadContent();
 void Update(float deltaTime);
 void Render();
 void Cleanup();
+
+template <typename A>
+typename std::enable_if <std::is_array <A>::value, size_t>::type
+ArrayLength(const A& a)
+{
+    return std::extent<A>::value;
+}
+
+void CreateCube(float size)
+{
+    // A cube has six faces, each one pointing in a different direction.
+    const int FaceCount = 6;
+
+    static const XMVECTORF32 faceNormals[FaceCount] =
+    {
+        { 0,  0,  1 },
+        { 0,  0, -1 },
+        { 1,  0,  0 },
+        { -1,  0,  0 },
+        { 0,  1,  0 },
+        { 0, -1,  0 },
+    };
+
+    static const XMFLOAT2 textureCoordinates[4] =
+    {
+        { 1, 0 },
+        { 1, 1 },
+        { 0, 1 },
+        { 0, 0 },
+    };
+
+    std::vector<VertexPosNormColTex> vertices;
+    std::vector<uint16_t> indices;
+
+    size /= 2;
+
+    // Create each face in turn.
+    for (int i = 0; i < FaceCount; i++)
+    {
+        XMVECTOR normal = faceNormals[i];
+
+        // Get two vectors perpendicular both to the face normal and to each other.
+        XMVECTOR basis = (i >= 4) ? g_XMIdentityR2 : g_XMIdentityR1;
+
+        XMVECTOR side1 = XMVector3Cross(normal, basis);
+        XMVECTOR side2 = XMVector3Cross(normal, side1);
+
+        // Six indices (two triangles) per face.
+        uint16_t vbase = static_cast<uint16_t>(vertices.size());
+        indices.push_back(vbase + 0);
+        indices.push_back(vbase + 1);
+        indices.push_back(vbase + 2);
+
+        indices.push_back(vbase + 0);
+        indices.push_back(vbase + 2);
+        indices.push_back(vbase + 3);
+
+        auto vectorToFloat3 = [](XMVECTOR& v)
+        {
+            return XMFLOAT3(XMVectorGetX(v), XMVectorGetY(v), XMVectorGetZ(v));
+        };
+
+        // Four vertices per face.
+        vertices.push_back({ vectorToFloat3((normal - side1 - side2) * size), vectorToFloat3(normal), XMFLOAT3(0.0f, 1.0f, 0.0f), textureCoordinates[0] });
+        vertices.push_back({ vectorToFloat3((normal - side1 + side2) * size), vectorToFloat3(normal), XMFLOAT3(0.0f, 1.0f, 0.0f), textureCoordinates[1] });
+        vertices.push_back({ vectorToFloat3((normal + side1 + side2) * size), vectorToFloat3(normal), XMFLOAT3(0.0f, 1.0f, 0.0f), textureCoordinates[2] });
+        vertices.push_back({ vectorToFloat3((normal + side1 - side2) * size), vectorToFloat3(normal), XMFLOAT3(0.0f, 1.0f, 0.0f), textureCoordinates[3] });
+    }
+
+    {// Reverse Winding order
+        assert((indices.size() % 3) == 0);
+        for (auto it = indices.begin(); it != indices.end(); it += 3)
+        {
+            std::swap(*it, *(it + 2));
+        }
+
+        for (auto it = vertices.begin(); it != vertices.end(); ++it)
+        {
+            it->Texture.x = (1.f - it->Texture.x);
+        }
+    }
+
+    if (g_Vertices)
+    {
+        delete[] g_Vertices;
+    }
+    g_VerticesLength = static_cast<int>(vertices.size());
+    g_Vertices = new VertexPosNormColTex[g_VerticesLength];
+    std::copy(vertices.begin(), vertices.end(), stdext::checked_array_iterator<VertexPosNormColTex*>(g_Vertices, g_VerticesLength));
+
+    if (g_Indicies)
+    {
+        delete[] g_Indicies;
+    }
+    g_IndicesLength = static_cast<int>(indices.size());
+    g_Indicies = new WORD[g_IndicesLength];
+    std::copy(indices.begin(), indices.end(), stdext::checked_array_iterator<WORD*>(g_Indicies, g_IndicesLength));
+}
 
 /**
 * Initialize the application window.
@@ -537,12 +618,16 @@ bool LoadContent()
 
 	HRESULT hr;
 
+    {// Create Cube Index/Vertex data
+        CreateCube(2.0f);
+    }
+
 	{// Create an initialize the simple vertex buffer.
 		D3D11_BUFFER_DESC vertexBufferDesc;
 		ZeroMemory(&vertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
 
 		vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		vertexBufferDesc.ByteWidth = sizeof(VertexPosNormColTex) * _countof(g_Vertices);
+		vertexBufferDesc.ByteWidth = sizeof(VertexPosNormColTex) * g_VerticesLength;
 		vertexBufferDesc.CPUAccessFlags = 0;
 		vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
 
@@ -561,7 +646,7 @@ bool LoadContent()
 		ZeroMemory(&indexBufferDesc, sizeof(D3D11_BUFFER_DESC));
 
 		indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-		indexBufferDesc.ByteWidth = sizeof(WORD) * _countof(g_Indicies);
+		indexBufferDesc.ByteWidth = sizeof(WORD) * g_IndicesLength;
 		indexBufferDesc.CPUAccessFlags = 0;
 		indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
 		resourceData.pSysMem = g_Indicies;
@@ -926,7 +1011,7 @@ bool LoadContent()
 		light.ConstantAttenuation = 1.0f;
 		light.LinearAttenuation = 0.08f;
 		light.QuadraticAttenuation = 0.0f;
-		XMFLOAT4 LightPosition = XMFLOAT4(0, 12.0f, 0, 1.0f);
+		XMFLOAT4 LightPosition = XMFLOAT4(0, 12.0f, -1.0f, 1.0f);
 		light.Position = LightPosition;
 		g_LightProperties.Lights[0] = light;
 	}
@@ -1007,7 +1092,7 @@ void Update(float deltaTime)
 	g_PerFrameTransformData.ViewProjectionMatrix = viewProjectionMatrix;
 
     static float angle = 0.0f;
-    angle += 90.0f * deltaTime;
+    angle += 90.0f * (deltaTime/2.0f);
     XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
 	const XMMATRIX rotationMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
 	const XMMATRIX translation = XMMatrixTranslation(0, 10.f, 0);
@@ -1093,7 +1178,7 @@ void Render()
 			
 			g_d3dDeviceContext->PSSetConstantBuffers(0, 1, &g_d3dMaterialPropertiesConstantBuffer);
 
-			g_d3dDeviceContext->DrawIndexed(_countof(g_Indicies), 0, 0);
+			g_d3dDeviceContext->DrawIndexed(g_IndicesLength, 0, 0);
 		}
 
 		{ // Light Cube
@@ -1109,7 +1194,7 @@ void Render()
 			g_d3dDeviceContext->PSSetShader(g_d3dUnlitPixelShader, nullptr, 0);
 
 
-			g_d3dDeviceContext->DrawIndexed(_countof(g_Indicies), 0, 0);
+			g_d3dDeviceContext->DrawIndexed(g_IndicesLength, 0, 0);
 		}
 	}
 
@@ -1118,6 +1203,9 @@ void Render()
 
 void UnloadContent()
 {
+    delete[] g_Vertices;
+    delete[] g_Indicies;
+
     SafeRelease(g_d3dConstantBuffers[CB_Frame]);
     SafeRelease(g_d3dConstantBuffers[CB_Object]);
     SafeRelease(g_d3dSimpleIndexBuffer);
