@@ -5,9 +5,12 @@
 #include <memory>
 #include <iterator>
 #include "Effects.h"
+#include "Camera.h"
 #define MAX_LIGHTS 8
 
 using namespace DirectX;
+
+Camera g_Camera;
 
 const LONG g_WindowWidth = 1280;
 const LONG g_WindowHeight = 720;
@@ -1054,45 +1057,75 @@ bool LoadContent()
 
 void Update(float deltaTime)
 {
-	static XMVECTOR eyePosition = XMVectorSet(0, 5, -10, 1);
 	const float speed = 4.0f;
+
+	XMVECTOR cameraTranslation = XMVectorSet(0,0,0,0);
 	if (GetKeyState('A') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetX(eyePosition, XMVectorGetX(eyePosition) - speed * deltaTime);
+		cameraTranslation = XMVectorSetX(cameraTranslation, XMVectorGetX(cameraTranslation) - speed * deltaTime);
 	}
 	if (GetKeyState('D') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetX(eyePosition, XMVectorGetX(eyePosition) + speed * deltaTime);
+		cameraTranslation = XMVectorSetX(cameraTranslation, XMVectorGetX(cameraTranslation) + speed * deltaTime);
 	}
 	if (GetKeyState('Q') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetY(eyePosition, XMVectorGetY(eyePosition) - speed * deltaTime);
+		cameraTranslation = XMVectorSetY(cameraTranslation, XMVectorGetY(cameraTranslation) - speed * deltaTime);
 	}
 	if (GetKeyState('E') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetY(eyePosition, XMVectorGetY(eyePosition) + speed * deltaTime);
+		cameraTranslation = XMVectorSetY(cameraTranslation, XMVectorGetY(cameraTranslation) + speed * deltaTime);
 	}
 	if (GetKeyState('W') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) + speed * deltaTime);
+		cameraTranslation = XMVectorSetZ(cameraTranslation, XMVectorGetZ(cameraTranslation) + speed * deltaTime);
 	}
 	if (GetKeyState('S') & 0x8000) /*check if high-order bit is set (1 << 15)*/
 	{
-		eyePosition = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) - speed * deltaTime);
+		cameraTranslation = XMVectorSetZ(cameraTranslation, XMVectorGetZ(cameraTranslation) - speed * deltaTime);
 	}
-	g_LightProperties.EyePosition.x = XMVectorGetX(eyePosition);
-	g_LightProperties.EyePosition.y = XMVectorGetY(eyePosition);
-	g_LightProperties.EyePosition.z = XMVectorGetZ(eyePosition);
+	g_Camera.Translate(cameraTranslation);
 
-	XMVECTOR focusPoint = XMVectorSetZ(eyePosition, XMVectorGetZ(eyePosition) + 0.1f);
-    XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
-    g_ViewMatrix = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
+
+	if (GetKeyState(VK_LEFT) & 0x8000) /*check if high-order bit is set (1 << 15)*/
+	{
+		g_Camera.SetRotation(XMVectorSet(0, 1, 0, 0), -speed * 10.0f * deltaTime);
+	}
+	if (GetKeyState(VK_RIGHT) & 0x8000) /*check if high-order bit is set (1 << 15)*/
+	{
+		g_Camera.SetRotation(XMVectorSet(0, 1, 0, 0), speed * 10.0f * deltaTime);
+	}
+#if 0
+	// Set fwd vector
+	static XMVECTOR focusVector = XMVectorSet(0,0,1,0);
+	const float focusOffset = 1.0f;
+
+	// Rotate the fwd vector based on input.
+	if (GetKeyState(VK_LEFT) & 0x8000)
+	{
+		FXMVECTOR rotationQuaternion = XMQuaternionRotationAxis(
+			XMVectorSet(0, 1, 0, 0), 
+			XMVectorGetY(focusVector) - speed * deltaTime
+		);
+	}
+
+	// create focus point by offsetting the point along the rotated vector.
+
+	// Generate a vector.
+#endif
+
+	// Need to share the eye position in order to calculate specular.
+	g_LightProperties.EyePosition = g_Camera.GetPositionFloat();
+	g_ViewMatrix = g_Camera.GetViewMatrix();
 
 	const XMMATRIX viewProjectionMatrix = g_ViewMatrix * g_ProjectionMatrix;
 	g_PerFrameTransformData.ViewProjectionMatrix = viewProjectionMatrix;
 
     static float angle = 0.0f;
-    angle += 90.0f * (deltaTime/2.0f);
+	if (GetKeyState('Z') & 0x8000)
+	{
+		angle += 90.0f * (deltaTime/2.0f);
+	}
     XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
 	const XMMATRIX rotationMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
 	const XMMATRIX translation = XMMatrixTranslation(0, 10.f, 0);

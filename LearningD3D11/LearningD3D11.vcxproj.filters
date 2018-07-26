@@ -21,12 +21,18 @@
     <ClCompile Include="src\Renderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Camera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="inc\DirectXTemplate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="inc\Renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
