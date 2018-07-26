@@ -19,6 +19,7 @@ public:
 	XMMATRIX GetViewMatrix();
 	const XMVECTOR& GetPositionVector() { return position; }
 	XMFLOAT4 GetPositionFloat();
+	XMFLOAT4 GetForwardDirectionFloat();
 	Camera();
 	~Camera();
 };

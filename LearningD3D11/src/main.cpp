@@ -1115,7 +1115,7 @@ void Update(float deltaTime)
 #endif
 
 	// Need to share the eye position in order to calculate specular.
-	g_LightProperties.EyePosition = g_Camera.GetPositionFloat();
+	g_LightProperties.EyePosition = g_Camera.GetForwardDirectionFloat();
 	g_ViewMatrix = g_Camera.GetViewMatrix();
 
 	const XMMATRIX viewProjectionMatrix = g_ViewMatrix * g_ProjectionMatrix;

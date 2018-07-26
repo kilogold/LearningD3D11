@@ -1,5 +1,15 @@
 #include "Camera.h"
 
+XMFLOAT4 VectorToFloat4(XMVECTOR &V)
+{
+	XMFLOAT4 float4Position;
+	float4Position.x = XMVectorGetX(V);
+	float4Position.y = XMVectorGetY(V);
+	float4Position.z = XMVectorGetZ(V);
+	float4Position.w = XMVectorGetW(V);
+	return float4Position;
+}
+
 void Camera::Translate(XMVECTOR& translation)
 {
 	position += translation;
@@ -7,12 +17,12 @@ void Camera::Translate(XMVECTOR& translation)
 
 XMFLOAT4 Camera::GetPositionFloat()
 {
-	XMFLOAT4 float4Position;
-	float4Position.x = XMVectorGetX(position);
-	float4Position.y = XMVectorGetY(position);
-	float4Position.z = XMVectorGetZ(position);
-	float4Position.w = XMVectorGetW(position);
-	return float4Position;
+	return VectorToFloat4(position);
+}
+
+XMFLOAT4 Camera::GetForwardDirectionFloat()
+{
+	return VectorToFloat4(forwardVector);
 }
 
 void Camera::SetRotation(XMVECTOR axis, float angleDegrees)

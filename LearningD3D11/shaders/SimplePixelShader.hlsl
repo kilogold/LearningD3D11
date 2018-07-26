@@ -125,7 +125,6 @@ LightingResult DoPointLight(Light light, float3 eyeVector, float4 surfacePositio
 
 LightingResult ComputeLighting(float4 surfacePosition, float3 normal)
 {
-    float3 eyeVector = normalize(EyePosition - surfacePosition).xyz;
         
     if (!Lights[0].Enabled)
     {
@@ -134,7 +133,7 @@ LightingResult ComputeLighting(float4 surfacePosition, float3 normal)
     }
     else
     {
-        return DoPointLight(Lights[0], eyeVector, surfacePosition, normal);
+        return DoPointLight(Lights[0], EyePosition.xyz, surfacePosition, normal);
     }
 }
 
