@@ -1,25 +1,27 @@
 #pragma once
 #include <DirectXMath.h>
 using namespace DirectX;
+typedef XMVECTOR XMQUATERNION;
 
 class Camera
 {
 private:
-	XMVECTOR upVector;
-	XMVECTOR forwardVector;
-	XMVECTOR position;
-	XMVECTOR lookAt; //position-vector
+    XMQUATERNION orientation;
+    XMVECTOR upVector;
+    XMVECTOR position;
+    XMVECTOR lookAt; //position-vector
 public:
 
-	// Mutators
-	void Translate(XMVECTOR& translation);
-	void SetRotation(XMVECTOR axis, float angleDegrees);
+    // Mutators
+    void Translate(XMVECTOR& translation);
+    void TranslateLocal(XMVECTOR& translation);
+    void Rotate(XMVECTOR axis, float angleDegrees);
 
-	// Accessors
-	XMMATRIX GetViewMatrix();
-	const XMVECTOR& GetPositionVector() { return position; }
-	XMFLOAT4 GetPositionFloat();
-	XMFLOAT4 GetForwardDirectionFloat();
-	Camera();
-	~Camera();
+    // Accessors
+    XMMATRIX GetViewMatrix();
+    const XMVECTOR& GetPositionVector() { return position; }
+    XMFLOAT4 GetPositionFloat();
+    XMFLOAT4 GetForwardDirectionFloat();
+    Camera();
+    ~Camera();
 };

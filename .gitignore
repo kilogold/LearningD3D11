@@ -327,3 +327,5 @@ ASALocalRun/
 
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
+/LearningD3D11/inc/VertexShader.h
+/LearningD3D11/inc/SimplePixelShader.h
