@@ -16,6 +16,7 @@ struct AppData
 
 struct VertexShaderOutput
 {
+    float2 texcoord : TEXCOORD;
     float4 color : COLOR;
     float3 normalWS : WS_NORMAL;
     float4 positionWS : WS_POSTION;
@@ -28,6 +29,7 @@ VertexShaderOutput InstancedVertexShader( AppData IN )
  
     matrix MVP = mul(viewProjectionMatrix, IN.worldMatrix);
 
+    OUT.texcoord = float2(0, 0);
     OUT.color = float4( IN.color, 1.0f );
     OUT.normalWS = mul((float3x3) IN.inverseTransposeWorldMatrix, IN.normal);
     OUT.positionWS = mul(IN.worldMatrix, float4(IN.position, 1));

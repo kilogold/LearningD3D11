@@ -1,5 +1,6 @@
 struct PixelShaderInput
 {
+    float2 texcoord : TEXCOORD;
     float4 color : COLOR;
     float3 normalWS : WS_NORMAL;
     float4 positionWS : WS_POSTION;

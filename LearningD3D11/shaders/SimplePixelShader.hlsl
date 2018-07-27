@@ -64,6 +64,7 @@ cbuffer LightProperties : register(b1)
 
 struct PixelShaderInput
 {
+    float2 texcoord : TEXCOORD;
     float4 color : COLOR;
     float3 normalWS : WS_NORMAL;
     float4 positionWS : WS_POSTION;
@@ -147,6 +148,11 @@ float4 SimplePixelShader( PixelShaderInput IN ) : SV_TARGET
     float4 specular = Material.Specular * lit.Specular;
     
     float4 texColor = { 1, 1, 1, 1 };
+
+    if (Material.UseTexture)
+    {
+        texColor = Texture.Sample(Sampler, IN.texcoord);
+    }
     
     float4 finalColor = (emissive + ambient + diffuse + specular) * texColor;
     
